@@ -6,51 +6,94 @@ A real-time messaging application with integrated AI features. Built with a mode
 
 This app allows users to chat in real-time and leverage AI to be more productive. The AI can summarize long conversations, answer questions about the chat history, and automatically extract tasks/todos from messages.
 
-### Features
-1. **Real-time Chat**: Connect with others instantly via Socket.IO.
-2. **AI Summarization**: Get a quick, real-time streamed summary of the current conversation.
-3. **Ask the AI**: Ask questions like "Who is handling the API?" and get answers based on the chat history.
-4. **Task Extraction**: The AI automatically reads the chat and pulls out action items (Tasks), ownership, and due dates.
+---
+
+## 🏗️ Architecture & Libraries
+
+This project follows **Clean Architecture** principles and the **MVVM (Model-View-ViewModel)** pattern. 
+
+### Core Architecture Flow
+```mermaid
+graph TD
+    UI[UI / Jetpack Compose] --> VM[ViewModel / StateFlow]
+    VM --> UC[Use Cases / Domain]
+    UC --> Repo[Repositories]
+    Repo --> Local[Room Database / Local Cache]
+    Repo --> Remote[Socket.IO & Retrofit / Network]
+    Remote <--> Node[Node.js Backend]
+    Node <--> Gemini[Gemini 2.0 Flash API]
+```
+
+### Libraries Used
+
+| Component | Library / Tech | Purpose |
+| :--- | :--- | :--- |
+| **UI** | Jetpack Compose | Modern declarative UI toolkit for Android. |
+| **Architecture** | MVVM & StateFlow | Managing UI state reactively. |
+| **Dependency Injection** | Dagger Hilt `2.60.1` | Providing dependencies (like repositories) to ViewModels. |
+| **Navigation** | Navigation3 API | Type-safe, modern screen navigation. |
+| **Local Database** | Room Database | Caching chat history and saving extracted tasks locally. |
+| **Real-time Network** | Socket.IO Client | Maintaining an open WebSocket connection for instant messaging. |
+| **REST Network** | Retrofit 2 | Making standard HTTP POST requests for AI analysis. |
+| **Backend Server** | Node.js + Express | Handling connections, broadcasting messages, and securely querying Google's AI. |
+| **AI Model** | Google `@google/genai` | Utilizing Gemini 2.0 Flash for blazing-fast text analysis. |
 
 ---
 
-## 🏗️ Architecture & Tech Stack
-
-This project follows **Clean Architecture** principles and the **MVVM (Model-View-ViewModel)** pattern. It is split into two main parts: the Android App and the Backend.
-
-### Android App (`/android`)
-- **UI Toolkit**: Jetpack Compose
-- **Architecture**: Clean Architecture (Domain -> Data -> Presentation)
-- **Dependency Injection**: Dagger Hilt (`2.60.1`)
-- **Networking/Real-time**: Retrofit 2 & Socket.IO Client
-- **Local Database**: Room Database (for caching messages and tasks)
-- **Navigation**: Navigation3 API
-
-### Backend (`/backend`)
-- **Runtime**: Node.js
-- **Framework**: Express.js
-- **Real-time**: Socket.IO (handles chat rooms and message broadcasting)
-- **AI Integration**: `@google/genai` (Gemini 2.0 Flash for summaries, Q&A, and task extraction)
-
----
-
-## 🔄 How the Data Flows (For Junior Devs)
+## 🔄 App Flow (For Junior Devs)
 
 Understanding how data moves through this app is the key to understanding the codebase.
 
-### 1. Sending a Chat Message
-1. **Presentation Layer**: User types a message in `ChatScreen` and clicks send. The `ChatViewModel` receives this intent.
-2. **Domain Layer**: The ViewModel calls the `SendMessageUseCase`.
-3. **Data Layer**: The UseCase calls `ChatRepositoryImpl`, which uses the `SocketService` to emit a `send_message` event to the Node.js backend.
-4. **Backend**: The Node.js server receives the message, attaches a timestamp, and broadcasts it to everyone in the room via Socket.IO.
-5. **Back to Android**: The `SocketService` receives the incoming broadcast, saves it to the local **Room Database**, and updates the `StateFlow`. The UI automatically recomposes to show the new message.
+### 1. Sending a Chat Message (The Socket Flow)
+```mermaid
+sequenceDiagram
+    participant User
+    participant ChatScreen
+    participant ChatViewModel
+    participant SocketService
+    participant Backend
+    participant RoomDB
 
-### 2. Using the AI (e.g., Task Extraction)
-1. **Presentation Layer**: User opens the AI Panel (`AiPanelSheet`) and selects "Tasks". `AiPanelViewModel` handles this.
-2. **Domain Layer**: The ViewModel calls `ExtractTasksUseCase`, passing the recent chat history.
-3. **Data Layer**: `AiRepositoryImpl` makes an HTTP POST request via **Retrofit** to the backend's `/ai/extract-tasks` endpoint.
-4. **Backend**: Node.js takes the chat history, constructs a strict prompt, and sends it to the **Gemini 2.0 Flash** model, instructing it to return a JSON array of tasks.
-5. **Back to Android**: The JSON response is parsed into Kotlin data classes (`Task` model) and displayed in the UI.
+    User->>ChatScreen: Types message & clicks Send
+    ChatScreen->>ChatViewModel: sendMessage(text)
+    ChatViewModel->>SocketService: emit("send_message")
+    SocketService->>Backend: [Network] WebSocket payload
+    Backend-->>SocketService: [Network] Broadcast "receive_message"
+    SocketService->>RoomDB: Save to local database
+    RoomDB-->>ChatViewModel: StateFlow triggers update
+    ChatViewModel-->>ChatScreen: UI Recomposes automatically
+```
+* **Step 1:** The user types a message in `ChatScreen`.
+* **Step 2:** The `ChatViewModel` catches this and tells the `ChatRepository` to send it.
+* **Step 3:** The `SocketService` fires the message over the network to the Node.js backend.
+* **Step 4:** The backend broadcasts the message to everyone (including the sender).
+* **Step 5:** The Android app receives the broadcast, saves the message to **Room**, and the UI updates automatically because it is observing the database via a `StateFlow`.
+
+### 2. Using the AI (The Task Extraction Flow)
+```mermaid
+sequenceDiagram
+    participant User
+    participant AiPanelSheet
+    participant AiViewModel
+    participant Retrofit
+    participant Backend
+    participant Gemini
+
+    User->>AiPanelSheet: Clicks "Extract Tasks"
+    AiPanelSheet->>AiViewModel: extractTasks(chatHistory)
+    AiViewModel->>Retrofit: POST /ai/extract-tasks
+    Retrofit->>Backend: [Network] HTTP Request with messages
+    Backend->>Gemini: Prompt + Chat History
+    Gemini-->>Backend: JSON Array of Tasks
+    Backend-->>Retrofit: [Network] HTTP 200 OK + JSON
+    Retrofit-->>AiViewModel: Parse to Kotlin Objects
+    AiViewModel-->>AiPanelSheet: Display Tasks in UI
+```
+* **Step 1:** The user opens the AI Panel and requests task extraction.
+* **Step 2:** The `AiViewModel` gathers the recent chat history and makes a standard HTTP POST request via **Retrofit**.
+* **Step 3:** The Node.js backend receives the request and constructs a prompt for **Gemini 2.0 Flash**.
+* **Step 4:** Gemini analyzes the chat and returns a structured JSON array.
+* **Step 5:** The backend forwards the JSON back to Android, which parses it into Kotlin data classes (`Task`) and displays them for the user to save.
 
 ---
 
@@ -84,8 +127,3 @@ Understanding how data moves through this app is the key to understanding the co
 5. Click the **Run (▶️)** button in Android Studio to install and launch the app.
 
 *(Note: The app expects the backend to be running on `http://10.0.2.2:3000` which is the default localhost alias for Android emulators. If testing on a physical device, update the BASE_URL in `NetworkModule.kt` to your computer's local IP address).*
-
----
-
-## 🤝 Contributing
-Feel free to fork this project, open issues, or submit Pull Requests! Ensure you follow the Clean Architecture structure when adding new features.
