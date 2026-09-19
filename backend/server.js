@@ -34,6 +34,10 @@ io.on('connection', (socket) => {
 
   // Join a room
   socket.on('join', ({ roomId, userId, userName }) => {
+    // Keep track of which room and user this socket represents
+    socket.roomId = roomId;
+    socket.userId = userId;
+    
     socket.join(roomId);
     const room = getOrCreateRoom(roomId);
     room.users[userId] = userName;
@@ -104,6 +108,20 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`[Socket] Disconnected: ${socket.id}`);
+    
+    // Automatically remove user if they disconnected without explicitly leaving
+    if (socket.roomId && socket.userId) {
+      const room = rooms[socket.roomId];
+      if (room && room.users[socket.userId]) {
+        const userName = room.users[socket.userId];
+        delete room.users[socket.userId];
+        
+        io.to(socket.roomId).emit('user_left', { userId: socket.userId, userName, timestamp: Date.now() });
+        io.to(socket.roomId).emit('user_list', Object.entries(room.users).map(([id, name]) => ({ id, name })));
+        
+        console.log(`[Socket] Removed ${socket.userId} from room ${socket.roomId} due to disconnect`);
+      }
+    }
   });
 });
 
@@ -114,6 +132,6 @@ app.get('/health', (req, res) => {
 
 // ─── Start server ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`AIChat backend running on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`AIChat backend running on http://0.0.0.0:${PORT}`);
 });

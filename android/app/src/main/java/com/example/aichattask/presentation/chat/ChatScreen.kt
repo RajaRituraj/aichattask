@@ -72,19 +72,14 @@ fun ChatScreen(
                 onOpenTasks = onOpenTasks
             )
         },
-        bottomBar = {
-            ChatInput(
-                text = uiState.inputText,
-                onTextChange = viewModel::onInputChange,
-                onSend = viewModel::sendMessage,
-                typingUsers = uiState.typingUsers
-            )
-        }
+        contentWindowInsets = WindowInsets(0, 0, 0, 0) // We will handle insets manually
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(top = padding.calculateTopPadding())
+                .navigationBarsPadding()
+                .imePadding()
         ) {
             // Connection banner
             AnimatedVisibility(
@@ -117,6 +112,14 @@ fun ChatScreen(
                     }
                 }
             }
+
+            // Chat Input at the bottom of the Column
+            ChatInput(
+                text = uiState.inputText,
+                onTextChange = viewModel::onInputChange,
+                onSend = viewModel::sendMessage,
+                typingUsers = uiState.typingUsers
+            )
         }
     }
 }

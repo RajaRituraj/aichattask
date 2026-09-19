@@ -40,7 +40,7 @@ Provide a clear, structured summary in 3-5 bullet points.`;
   res.flushHeaders();
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
     const result = await model.generateContentStream(prompt);
 
     for await (const chunk of result.stream) {
@@ -90,7 +90,7 @@ Respond in this exact JSON format:
 Return ONLY valid JSON, no markdown.`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
 
@@ -140,7 +140,7 @@ Rules:
 - Return ONLY valid JSON, no markdown`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' });
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
 
